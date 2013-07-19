@@ -1,12 +1,12 @@
-module BuildingBlocks
+module Blocks
   class Base
-    # a pointer to the ActionView that called BuildingBlocks
+    # a pointer to the ActionView that called Blocks
     attr_accessor :view
 
-    # Hash of block names to BuildingBlocks::Container objects
+    # Hash of block names to Blocks::Container objects
     attr_accessor :blocks
 
-    # Array of BuildingBlocks::Container objects, storing the order of blocks as they were queued
+    # Array of Blocks::Container objects, storing the order of blocks as they were queued
     attr_accessor :queued_blocks
 
     # counter, used to give unnamed blocks a unique name
@@ -24,10 +24,10 @@ module BuildingBlocks
     # The variable to use when rendering the partial for the templating feature (by default, "blocks")
     attr_accessor :variable
 
-    # Boolean variable for whether BuildingBlocks should attempt to render blocks as partials if a defined block cannot be found
+    # Boolean variable for whether Blocks should attempt to render blocks as partials if a defined block cannot be found
     attr_accessor :use_partials
 
-    # Boolean variable for whether BuildingBlocks should render before and after blocks inside or outside of a collections' elements' surrounding tags
+    # Boolean variable for whether Blocks should render before and after blocks inside or outside of a collections' elements' surrounding tags
     attr_accessor :surrounding_tag_surrounds_before_and_after_blocks
 
     # Checks if a particular block has been defined within the current block scope.
@@ -89,9 +89,9 @@ module BuildingBlocks
     end
 
     # Render a block, first rendering any "before" blocks, then rendering the block itself, then rendering
-    # any "after" blocks. Additionally, a collection may also be passed in, and BuildingBlocks will render
+    # any "after" blocks. Additionally, a collection may also be passed in, and Blocks will render
     # an the block, along with corresponding before and after blocks for each element of the collection.
-    # BuildingBlocks will make four different attempts to render block:
+    # Blocks will make four different attempts to render block:
     #   1) Look for a block that has been defined inline elsewhere, using the blocks.define method:
     #      <% blocks.define :wizard do |options| %>
     #        Inline Block Step#<%= options[:step] %>.
@@ -143,7 +143,7 @@ module BuildingBlocks
           cloned_args = args.clone
           cloned_args.unshift(object)
           cloned_options = options.clone
-          cloned_options = cloned_options.merge(object.options) if object.is_a?(BuildingBlocks::Container)
+          cloned_options = cloned_options.merge(object.options) if object.is_a?(Blocks::Container)
           cloned_args.push(cloned_options)
 
           block_name = evaluated_proc(name_or_container, *cloned_args)
@@ -178,8 +178,22 @@ module BuildingBlocks
     end
     alias use render
 
+    def render_without_partials(name_or_container, *args, &block)
+      options = args.extract_options!
+      options[:skip_partials] = true
+      args.push(options)
+      render(name_or_container, *args, &block)
+    end
+
+    def render_with_partials(name_or_container, *args, &block)
+      options = args.extract_options!
+      options[:use_partials] = true
+      args.push(options)
+      render(name_or_container, *args, &block)
+    end
+
     # Queue a block for later rendering, such as within a template.
-    #   <%= BuildingBlocks::Base.new(self).render_template("shared/wizard") do |blocks| %>
+    #   <%= Blocks::Base.new(self).render_template("shared/wizard") do |blocks| %>
     #     <% blocks.queue :step1 %>
     #     <% blocks.queue :step2 do %>
     #       My overridden Step 2 |
@@ -221,7 +235,7 @@ module BuildingBlocks
     end
 
     # Render a partial, treating it as a template, and any code in the block argument will impact how the template renders
-    #   <%= BuildingBlocks::Base.new(self).render_template("shared/wizard") do |blocks| %>
+    #   <%= Blocks::Base.new(self).render_template("shared/wizard") do |blocks| %>
     #     <% blocks.queue :step1 %>
     #     <% blocks.queue :step2 do %>
     #       My overridden Step 2 |
@@ -427,7 +441,7 @@ module BuildingBlocks
     end
 
     def initialize(view, options={})
-      self.template_folder = options[:template_folder] ? options.delete(:template_folder) : BuildingBlocks.template_folder
+      self.template_folder = options[:template_folder] ? options.delete(:template_folder) : Blocks.template_folder
       self.variable = (options[:variable] ? options.delete(:variable) : :blocks).to_sym
       self.view = view
       self.global_options = options
@@ -435,8 +449,8 @@ module BuildingBlocks
       self.blocks = {}
       self.anonymous_block_number = 0
       self.block_groups = {}
-      self.use_partials = options[:use_partials].nil? ? BuildingBlocks.use_partials : options.delete(:use_partials)
-      self.surrounding_tag_surrounds_before_and_after_blocks = options[:surrounding_tag_surrounds_before_and_after_blocks].nil? ? BuildingBlocks.surrounding_tag_surrounds_before_and_after_blocks : options.delete(:surrounding_tag_surrounds_before_and_after_blocks)
+      self.use_partials = options[:use_partials].nil? ? Blocks.use_partials : options.delete(:use_partials)
+      self.surrounding_tag_surrounds_before_and_after_blocks = options[:surrounding_tag_surrounds_before_and_after_blocks].nil? ? Blocks.surrounding_tag_surrounds_before_and_after_blocks : options.delete(:surrounding_tag_surrounds_before_and_after_blocks)
     end
 
     # Return a unique name for an anonymously defined block (i.e. a block that has not been given a name)
@@ -446,7 +460,7 @@ module BuildingBlocks
     end
 
     def render_block_with_around_blocks(name_or_container, *args, &block)
-      name = name_or_container.is_a?(BuildingBlocks::Container) ? name_or_container.name.to_sym : name_or_container.to_sym
+      name = name_or_container.is_a?(Blocks::Container) ? name_or_container.name.to_sym : name_or_container.to_sym
       around_name = "around_#{name.to_s}".to_sym
 
       around_blocks = blocks[around_name].present? ? blocks[around_name].clone : []
@@ -469,7 +483,7 @@ module BuildingBlocks
       buffer = ActiveSupport::SafeBuffer.new
 
       block_options = {}
-      if (name_or_container.is_a?(BuildingBlocks::Container))
+      if (name_or_container.is_a?(Blocks::Container))
         name = name_or_container.name.to_sym
         block_options = name_or_container.options
       else
@@ -480,7 +494,7 @@ module BuildingBlocks
         block_container = blocks[name]
         args.push(global_options.merge(block_container.options).merge(block_options).merge(options))
         buffer << view.capture(*(args[0, block_container.block.arity]), &block_container.block)
-      elsif use_partials
+      elsif (use_partials || options[:use_partials]) && !options[:skip_partials]
         begin
           begin
             buffer << view.render("#{name.to_s}", global_options.merge(block_options).merge(options))
@@ -514,7 +528,7 @@ module BuildingBlocks
       options = args.extract_options!
 
       block_options = {}
-      if (name_or_container.is_a?(BuildingBlocks::Container))
+      if (name_or_container.is_a?(Blocks::Container))
         name = name_or_container.name.to_sym
         block_options = name_or_container.options
       else
@@ -534,18 +548,18 @@ module BuildingBlocks
       buffer
     end
 
-    # Build a BuildingBlocks::Container object given the passed in arguments
+    # Build a Blocks::Container object given the passed in arguments
     def build_block_container(*args, &block)
       options = args.extract_options!
       name = args.first ? args.shift : self.anonymous_block_name
-      block_container = BuildingBlocks::Container.new
+      block_container = Blocks::Container.new
       block_container.name = name.to_sym
       block_container.options = options
       block_container.block = block
       block_container
     end
 
-    # Build a BuildingBlocks::Container object and add it to an array of containers matching it's block name
+    # Build a Blocks::Container object and add it to an array of containers matching it's block name
     #  (used only for queuing a collection of before and after blocks for a particular block name)
     def queue_block_container(*args, &block)
       block_container = self.build_block_container(*args, &block)
@@ -556,7 +570,7 @@ module BuildingBlocks
       end
     end
 
-    # Build a BuildingBlocks::Container object and add it to the global hash of blocks if a block by the same
+    # Build a Blocks::Container object and add it to the global hash of blocks if a block by the same
     #  name is not already defined
     def define_block_container(*args, &block)
       block_container = self.build_block_container(*args, &block)
